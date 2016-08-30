@@ -1,0 +1,5 @@
+*.ipynb
+venv/
+.python-version
+*.jpg
+*.db
