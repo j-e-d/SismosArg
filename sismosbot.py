@@ -107,7 +107,7 @@ def scrape_last_events(c, url, api):
                 if image is not False:
                     images.append(image)
 
-                text = ('Sismo de {0}˚, con epicentro {1} '
+                text = ('Sismo de mag. {0}, con epicentro {1} '
                         'registrado a la{2} {3} http://www.'
                         'inpres.gov.ar/desktop/epicentro1.php?s={4}'
                         ).format(magnitude,
