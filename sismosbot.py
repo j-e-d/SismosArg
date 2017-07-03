@@ -77,7 +77,7 @@ def scrape_last_events(c, url, api):
         checked = item.xpath('./estado')[0].text
 
         image_filename = '{}.jpg'.format(sismo_id)
-        image_url = 'http://www.inpres.gov.ar/desktop/mapas/{}'.format(
+        image_url = 'http://www.inpres.gov.ar/desktop/{}'.format(
             image_filename)
 
         if TESTING:
