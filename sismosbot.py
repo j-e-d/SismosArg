@@ -56,7 +56,7 @@ def media_upload(api, filename):
     return response.media_id_string
 
 
-def scrape_last_events(c, url, api):
+def scrape_last_events(c, url, api, new_db):
     r = requests.get(url)
     doc = ET.XML(r.content)
     for item in doc.xpath('//item'):
@@ -74,10 +74,13 @@ def scrape_last_events(c, url, api):
         sismo_id = link.split('/')[-1][:-1]
         description = item.xpath('./description')[0].text.split(
             '.')[0].split(',')[0]
+        if 'La magnitud' in description:
+            position = description.find('La magnitud')
+            description = description[:position].strip()
         checked = item.xpath('./estado')[0].text
 
         image_filename = '{}.jpg'.format(sismo_id)
-        image_url = 'http://www.inpres.gov.ar/desktop/mapas/{}'.format(
+        image_url = 'https://www.inpres.gob.ar/desktop/mapas/{}'.format(
             image_filename)
 
         if TESTING:
@@ -100,7 +103,7 @@ def scrape_last_events(c, url, api):
             else:
                 plural = 's'
 
-            if magnitude >= LIMIT:
+            if magnitude >= LIMIT and not new_db:
                 get_image(image_url, image_filename)
                 images = list()
                 image = media_upload(api, image_filename)
@@ -108,8 +111,8 @@ def scrape_last_events(c, url, api):
                     images.append(image)
 
                 text = ('Sismo de mag. {0}, con epicentro {1} '
-                        'registrado a la{2} {3} http://www.'
-                        'inpres.gov.ar/desktop/epicentro1.php?s={4}'
+                        'registrado a la{2} {3} https://www.'
+                        'inpres.gob.ar/desktop/epicentro1.php?s={4}'
                         ).format(magnitude,
                                  description,
                                  plural,
@@ -117,20 +120,23 @@ def scrape_last_events(c, url, api):
                                  sismo_id)
                 logging.info('About to tweet %s, with media %s', text,
                              image_url)
+
                 if TESTING:
                     url_length = 23
                 else:
-                    config = api.configuration()
-                    url_length = int(config['short_url_length'])
-                url_ori = len('http://www.inpres.gov.ar/desktop/') + \
+                    # config = api.configuration() this endpoint was retired on jun/2021
+                    # url_length = int(config['short_url_length']) used to be ~23?
+                    url_length = 23
+                url_ori = len('https://www.inpres.gob.ar/desktop/') + \
                     len('epicentro1.php?s=') + len(sismo_id)
                 text_len = len(text) - url_ori + url_length
-                if text_len > 140:
-                    text = text[:140]
+                if text_len > 280:
+                    text = text[:280]
+
                 if TESTING:
+                    print (text)
                     print (text_len)
                     print (text, lat, lon, images)
-                    os.remove(image_filename)
                 else:
                     try:
                         api.update_status(text, lat=lat, long=lon,
@@ -138,7 +144,10 @@ def scrape_last_events(c, url, api):
                     except:
                         print (sys.exc_info()[0])
                         logging.exception('Update status failed')
-                    os.remove(image_filename)
+                    # TODO add field in DB with tweeted and mark when done
+                    # to be able to retry
+
+                os.remove(image_filename)
     return
 
 
@@ -194,13 +203,18 @@ def main():
         auth.set_access_token(access_token, access_token_secret)
         api = tweepy.API(auth)
 
-    url = 'http://contenidos.inpres.gov.ar/rss/ultimos50.xml'
+    url = 'http://contenidos.inpres.gob.ar/rss/ultimos50.xml'
+    new_db = False
 
-    # TODO: call create_db if db file not present
-    conn = sqlite3.connect('sismosarg.db')
+    try:
+        conn = sqlite3.connect('file:sismosarg.db?mode=rw', uri=True)
+    except sqlite3.OperationalError:
+        create_db()
+        conn = sqlite3.connect('file:sismosarg.db?mode=rw', uri=True)
+        new_db = True
     c = conn.cursor()
 
-    scrape_last_events(c, url, api)
+    scrape_last_events(c, url, api, new_db)
 
     conn.commit()
     conn.close()
